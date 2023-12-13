@@ -104,3 +104,18 @@ CREATE TABLE `reactions` (
   `emoji_name` VARCHAR(255) NOT NULL,
   `created_at` BIGINT NOT NULL
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+ALTER TABLE livestreams ADD INDEX `livestreams_user_id` (`user_id`);
+
+ALTER TABLE reservation_slots ADD INDEX `reservation_slots_start_at_end_at` (`start_at`, `end_at`);
+
+ALTER TABLE livestream_tags ADD INDEX `livestream_tags_livestream_id` (`livestream_id`);
+ALTER TABLE livestream_tags ADD INDEX `livestream_tags_tag_id_livestream_id` (`tag_id`, `livestream_id`);
+
+ALTER TABLE livecomments ADD INDEX `livecomments_livestream_id` (`livestream_id`);
+
+ALTER TABLE ng_words ADD INDEX `ng_words_user_id` (`user_id`);
+ALTER TABLE ng_words ADD INDEX `ng_words_livestream_id` (`livestream_id`);
+
+ALTER TABLE icons ADD INDEX `icons_user_id` (`user_id`);
+ALTER TABLE themes ADD INDEX `themes_user_id` (`user_id`);
