@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -67,13 +68,29 @@ func getReactionsHandler(c echo.Context) error {
 	}
 
 	reactions := make([]Reaction, len(reactionModels))
+	var wg sync.WaitGroup
+	errors := make(chan error, len(reactionModels))
+
 	for i := range reactionModels {
-		reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
+			if err != nil {
+				errors <- err
+				return
+			}
+			reactions[i] = reaction
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
-
-		reactions[i] = reaction
 	}
 
 	if err := tx.Commit(); err != nil {
