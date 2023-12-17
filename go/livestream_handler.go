@@ -202,7 +202,7 @@ func searchLivestreamsHandler(c echo.Context) error {
 			livestreamIDs = append(livestreamIDs, keyTaggedLivestream.LivestreamID)
 		}
 
-		query, params, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+		query, params, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?) ORDER BY FIELD(id, ?)", livestreamIDs, livestreamIDs)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to construct IN query: "+err.Error())
 		}
@@ -225,6 +225,7 @@ func searchLivestreamsHandler(c echo.Context) error {
 		}
 	}
 
+	// FIXME N + 1
 	livestreams := make([]Livestream, len(livestreamModels))
 	for i := range livestreamModels {
 		livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModels[i])
@@ -488,6 +489,7 @@ func getLivecommentReportsHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, reports)
 }
 
+// FIXME N + 1 だが 色々な箇所で利用されているので、一旦このまま
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
 	ownerModel := UserModel{}
 	if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
