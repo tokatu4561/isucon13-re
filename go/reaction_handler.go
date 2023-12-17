@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -67,13 +68,34 @@ func getReactionsHandler(c echo.Context) error {
 	}
 
 	reactions := make([]Reaction, len(reactionModels))
+	var wg sync.WaitGroup
+	errors := make(chan error, len(reactionModels))
+
+	// goroutine　の最大数を管理 (goroutine leak 対策) 5個まで
+	semaphore := make(chan struct{}, 5)
+	
 	for i := range reactionModels {
-		reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer func() { <-semaphore }() // goroutine終了時にsemaphoreを解放
+			semaphore <- struct{}{}
+			reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
+			if err != nil {
+				errors <- err
+				return
+			}
+			reactions[i] = reaction
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 		}
-
-		reactions[i] = reaction
 	}
 
 	if err := tx.Commit(); err != nil {
