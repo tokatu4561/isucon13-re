@@ -71,8 +71,8 @@ func getReactionsHandler(c echo.Context) error {
 	var wg sync.WaitGroup
 	errors := make(chan error, len(reactionModels))
 
-	// goroutine　の最大数を管理 (goroutine leak 対策) 5個まで
-	semaphore := make(chan struct{}, 5)
+	// goroutine　の最大数を管理 (goroutine leak 対策) 3個まで
+	semaphore := make(chan struct{}, 3)
 	
 	for i := range reactionModels {
 		wg.Add(1)
