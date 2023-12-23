@@ -29,6 +29,7 @@ const (
 )
 
 var fallbackImage = "../img/NoImage.jpg"
+var iconImageDir = "../img"
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -104,9 +105,12 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
+	// icon を db でなく　ファイルで読み書きするように変更
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	image, err = os.ReadFile(fmt.Sprintf("%s/%d.jpg", iconImageDir, user.ID))
+	if err != nil {
+		// 存在しない場合は fallback にする
+		if errors.Is(err, os.ErrNotExist) {
 			return c.File(fallbackImage)
 		} else {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
@@ -140,16 +144,12 @@ func postIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
-	}
-
-	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
-	if err != nil {
+	// icon を db でなく　ファイルで読み書きするように変更
+	if err := os.WriteFile(fmt.Sprintf("%s/%d.jpg", iconImageDir, userID), req.Image, 0666); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
 
-	iconID, err := rs.LastInsertId()
+	iconID, err := userID, nil
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
 	}
@@ -403,14 +403,14 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
 		return User{}, err
 	}
-
+	// icon を db でなく　ファイルで読み書きするように変更
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
+	image, err := os.ReadFile(fmt.Sprintf("%s/%d.jpg", iconImageDir, userModel.ID))
+	if err != nil {
+		// 存在しない場合は fallback にする
+		if errors.Is(err, os.ErrNotExist) {
+			image, _ = os.ReadFile(fallbackImage)
+		} else {
 			return User{}, err
 		}
 	}
