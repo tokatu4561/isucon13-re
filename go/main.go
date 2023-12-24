@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -30,6 +32,7 @@ const (
 var (
 	powerDNSSubdomainAddress string
 	dbConn                   *sqlx.DB
+	redisConn                *redis.Client
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 )
 
@@ -203,6 +206,26 @@ func main() {
 	}
 	defer conn.Close()
 	dbConn = conn
+
+	// Redis接続
+	redisConn = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		Password: "", // no password set
+		DB: 0, // use default DB
+	})
+	// Redis接続確認
+	var ctx = context.Background()
+	_, err = redisConn.Ping(ctx).Result()
+	if err != nil {
+		e.Logger.Errorf("failed to connect redis: %v", err)
+		os.Exit(1)
+	}
+	// redis の データを初期化
+	err = redisConn.FlushAll(ctx).Err()
+	if err != nil {
+		e.Logger.Errorf("failed to flush redis: %v", err)
+		os.Exit(1)
+	}
 
 	subdomainAddr, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
 	if !ok {

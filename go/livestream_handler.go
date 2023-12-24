@@ -489,8 +489,20 @@ func getLivecommentReportsHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, reports)
 }
 
-// FIXME N + 1 だが 色々な箇所で利用されているので、一旦このまま
+// FIXME N + 1 だが色々なところで使ってるので注意
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
+	cacheKey := "livestream-user:" + strconv.Itoa(int(livestreamModel.UserID)) + ":livestream:" + strconv.Itoa(int(livestreamModel.ID))
+
+	var livestream Livestream
+	// キャッシュにあればそれを返す
+	livestreamCache, err := redisConn.Get(ctx, cacheKey).Result()
+	if err == nil && livestreamCache != "" {
+		if err := json.Unmarshal([]byte(livestreamCache), &livestream); err != nil {
+			return Livestream{}, err
+		}
+		return livestream, nil
+	}
+
 	ownerModel := UserModel{}
 	if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
 		return Livestream{}, err
@@ -522,7 +534,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 		}
 	}
 
-	livestream := Livestream{
+	livestream = Livestream{
 		ID:           livestreamModel.ID,
 		Owner:        owner,
 		Title:        livestreamModel.Title,
@@ -533,5 +545,12 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel Li
 		StartAt:      livestreamModel.StartAt,
 		EndAt:        livestreamModel.EndAt,
 	}
+
+	jsonLiveStream, _ := json.Marshal(livestream) 
+	err = redisConn.Set(ctx, cacheKey, jsonLiveStream, 0).Err()
+	if err != nil {
+		return Livestream{}, err
+	}
+
 	return livestream, nil
 }

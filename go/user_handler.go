@@ -149,6 +149,17 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
 
+	// icon 即反映のため、 user の livestream のキャッシュを削除する (livestream は icon をキャッシュしている)
+	keys, err := redisConn.Keys(ctx, fmt.Sprintf("livestream-user:%d*", userID)).Result()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream-user keys: "+err.Error())
+	}
+	if len(keys) > 0 {
+		if _, err := redisConn.Del(ctx, keys...).Result(); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete livestream-user keys: "+err.Error())
+		}
+	}
+
 	iconID, err := userID, nil
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
